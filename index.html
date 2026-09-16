@@ -111,6 +111,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .minbox button{background:var(--oceano);color:var(--areia);border:0;padding:8px 14px;font:inherit;font-size:9px;letter-spacing:.22em;text-transform:uppercase;cursor:pointer}
 .total{display:flex;justify-content:space-between;padding:14px 0 0;font-size:12px;color:var(--quiet);letter-spacing:.06em}
 .empty{color:var(--quiet);font-size:13px;padding:30px 0;text-align:center;font-style:italic;font-family:"Libre Bodoni",Georgia,serif}
+.row .bot .cbw input,.row .cad input[type=text]{text-align:left;font-family:"Space Grotesk",system-ui,sans-serif;font-size:16px;font-weight:400}
+.row .cad input[type=number]{text-align:left;font-family:"Space Grotesk",system-ui,sans-serif;font-size:16px}
+.row .cad label{color:var(--quiet);font-weight:500}
 </style>
 </head>
 <body>
@@ -208,6 +211,9 @@ function canon(v){var k=norm(v);if(P[k])return P[k].nome;return names().filter(f
 function unitOf(k){k=norm(k);if(P[k])return P[k].unidade;var r=L.filter(function(x){return norm(x[2])===k}).sort(function(a,b){return a[6]<b[6]?1:-1})[0];return r?r[8]:'un'}
 function qtyUn(r){var pc=pcOf(r[2]);return ((r[8]==='cx'||r[8]==='pct')&&pc)?Number(r[3])*pc:Number(r[3])}
 function pcOf(k){var p=P[norm(k)];return p&&p.por_caixa?Number(p.por_caixa):null}
+function baseOf(k){var p=P[norm(k)];if(!p||!p.sabor)return k;var i=norm(k).lastIndexOf(norm(p.sabor));return i>0?k.slice(0,i).trim():k}
+function flavorsOf(base){var b=norm(base),out=[];names().forEach(function(n){var p=P[norm(n)];if(p&&p.sabor&&norm(baseOf(n))===b)out.push({name:n,sabor:p.sabor})});return out}
+function baseNames(){var seen={},out=[];names().forEach(function(n){var b=baseOf(n),k=norm(b);if(!seen[k]){seen[k]=1;out.push(b)}});return out.sort(function(a,b){return a.localeCompare(b,'pt')})}
 function saborOf(k){var p=P[norm(k)];if(!p||!p.sabor)return '';return norm(k).indexOf(norm(p.sabor))>=0?'':p.sabor}
 function sabores(){var s=[];Object.keys(P).forEach(function(k){var f=P[k].sabor;if(f&&s.indexOf(f)<0)s.push(f)});return s.sort(function(a,b){return a.localeCompare(b,'pt')})}
 function fornecedores(){var s=[];Object.keys(P).forEach(function(k){var f=P[k].fornecedor;if(f&&s.indexOf(f)<0)s.push(f)});return s.sort(function(a,b){return a.localeCompare(b,'pt')})}
@@ -237,16 +243,25 @@ function addRow(name){
  div.innerHTML='<div class="num"></div><div class="body"><div class="top"><div style="flex:1"><input type="text" class="p" placeholder="Produto" autocomplete="off" value="'+esc(name||'')+'"><p class="hint"></p></div><button class="x" title="Remover linha" type="button">×</button></div>'+
   '<div class="bot b1"><div><label>Unidade</label>'+unitSel()+'</div><div><label class="ql">'+QL[mode]+'</label><input type="number" inputmode="decimal" step="0.5" min="0" class="q" placeholder="–"></div></div>'+
   '<div class="bot b2" style="display:none;grid-template-columns:1fr 1fr 1fr"><div><label class="pcl">Caixas</label><input type="number" inputmode="decimal" step="1" min="0" class="qc" placeholder="–"></div><div><label>Unidades</label><input type="number" inputmode="decimal" step="0.5" min="0" class="qu" placeholder="–"></div><div><label>Total</label><div class="tot" style="font-family:\'Libre Bodoni\',Georgia,serif;font-size:20px;padding:4px 0;text-align:center;color:var(--quiet)">–</div></div></div>'+
+  '<div class="sabline" style="display:none;margin-top:8px"><label>Sabor</label><select class="sabsel"></select></div>'+
   '<button type="button" class="link quiet cadt" style="display:none;margin-top:10px;font-size:11px">editar cadastro</button>'+
   '<div class="cad" style="display:none"><p class="eyebrow" style="margin:12px 0 6px">Cadastro do produto</p><div class="bot" style="margin-top:0"><div><label>Sabor</label><input type="text" class="csab" placeholder="opcional" autocomplete="off"></div><div><label>Fornecedor</label><input type="text" class="cfor" placeholder="opcional" autocomplete="off"></div></div><div class="bot"><div><label>Un. por caixa ou pacote</label><input type="number" inputmode="decimal" step="1" min="0" class="cpc" placeholder="opcional"></div></div></div></div>';
  $('rows').appendChild(div);renum();
  var p=div.querySelector('.p'),h=div.querySelector('.hint'),u=div.querySelector('.u'),b1=div.querySelector('.b1'),b2=div.querySelector('.b2');
- function layout(){var v=p.value.trim(),m=v?canon(v):null,pc=m?pcOf(m):null;div.dataset.pc=pc||'';if(m){var pu=(P[norm(m)]||{}).unidade;div.querySelector('.pcl').textContent=pu==='pct'?'Pacotes':'Caixas'}b1.style.display=pc?'none':'';b2.style.display=pc?'grid':'none';
-  h.textContent=!v?'':m?(pc?'1 '+(((P[norm(m)]||{}).unidade==='pct')?'pacote':'caixa')+' = '+fq(pc)+' un':'Já cadastrado'):'Produto novo: preencha o cadastro abaixo. Se tiver sabor, cada sabor vira um produto (ex.: Hidro Max Uva).';if(m)u.value=unitOf(m);
-  var cad=div.querySelector('.cad'),ct=div.querySelector('.cadt');div.dataset.isnew=(v&&!m)?'1':'';
-  if(v&&!m){cad.style.display='block';ct.style.display='none'}else if(m){ct.style.display='';if(!div.dataset.cadopen)cad.style.display='none';var P0=P[norm(m)]||{};div.querySelector('.csab').value=P0.sabor||'';div.querySelector('.cfor').value=P0.fornecedor||'';div.querySelector('.cpc').value=P0.por_caixa||''}else{cad.style.display='none';ct.style.display='none'}}
+ function resolvedName(){var v=p.value.trim();if(!v)return '';var fl=flavorsOf(v);if(fl.length){var s=div.querySelector('.sabsel').value;if(s==='__new__')return '';var hit=fl.filter(function(x){return x.sabor===s})[0];return hit?hit.name:''}return canon(v)||v}
+ function layout(){var v=p.value.trim(),fl=v?flavorsOf(v):[],sl=div.querySelector('.sabline'),ss=div.querySelector('.sabsel');
+  if(fl.length){sl.style.display='block';var cur=ss.dataset.base===norm(v)?ss.value:'';ss.innerHTML='<option value="">Escolher sabor</option>'+fl.map(function(x){return '<option value="'+esc(x.sabor)+'"'+(x.sabor===cur?' selected':'')+'>'+esc(x.sabor)+'</option>'}).join('')+'<option value="__new__"'+(cur==='__new__'?' selected':'')+'>Outro sabor (digitar)</option>';ss.dataset.base=norm(v)}else{sl.style.display='none';ss.innerHTML='';ss.dataset.base=''}
+  var isNewFlavor=fl.length&&ss.value==='__new__',m=isNewFlavor?null:(fl.length?(resolvedName()?canon(resolvedName()):null):(v?canon(v):null)),pc=m?pcOf(m):null;div.dataset.pc=pc||'';div.dataset.force=isNewFlavor?'1':'';div.dataset.base=isNewFlavor?v:'';
+  if(m){var pu=(P[norm(m)]||{}).unidade;div.querySelector('.pcl').textContent=pu==='pct'?'Pacotes':'Caixas'}
+  b1.style.display=pc?'none':'';b2.style.display=pc?'grid':'none';
+  h.textContent=!v?'':m?(pc?'1 '+(((P[norm(m)]||{}).unidade==='pct')?'pacote':'caixa')+' = '+fq(pc)+' un':'Já cadastrado'):(fl.length&&!isNewFlavor?'Escolha o sabor.':isNewFlavor?'Novo sabor de '+esc(v)+': digite o sabor abaixo.':'Produto novo: preencha o cadastro abaixo. Se tiver sabor, cada sabor vira um produto.');
+  if(m)u.value=unitOf(m);
+  var cad=div.querySelector('.cad'),ct=div.querySelector('.cadt');div.dataset.isnew=((v&&!m&&!fl.length)||isNewFlavor)?'1':'';
+  if(div.dataset.isnew){cad.style.display='block';ct.style.display='none';if(isNewFlavor){var P0=P[norm(fl[0].name)]||{};if(!div.querySelector('.cfor').value)div.querySelector('.cfor').value=P0.fornecedor||'';if(!div.querySelector('.cpc').value)div.querySelector('.cpc').value=P0.por_caixa||'';u.value=P0.unidade||'un'}}
+  else if(m){ct.style.display='';if(!div.dataset.cadopen)cad.style.display='none';var P1=P[norm(m)]||{};div.querySelector('.csab').value=P1.sabor||'';div.querySelector('.cfor').value=P1.fornecedor||'';div.querySelector('.cpc').value=P1.por_caixa||''}
+  else{cad.style.display='none';ct.style.display='none'}}
  function total(){var pc=Number(div.dataset.pc||0),c=Number(div.querySelector('.qc').value||0),n=Number(div.querySelector('.qu').value||0);var tt=c*pc+n;div.querySelector('.tot').textContent=(c||n)?fq(tt)+' un':'–'}
- combo(p,names,{onPick:layout,onInput:layout,extra:saborOf});combo(div.querySelector('.csab'),sabores,{newLabel:'Usar'});combo(div.querySelector('.cfor'),function(){var s=fornecedores();FORN_BASE.forEach(function(b){if(!s.some(function(x){return norm(x)===norm(b)}))s.push(b)});return s.sort(function(a,b){return a.localeCompare(b,'pt')})},{newLabel:'Usar'});
+ combo(p,baseNames,{onPick:layout,onInput:layout,extra:function(b){var n=flavorsOf(b).length;return n?n+' sabor'+(n>1?'es':''):''}});div.querySelector('.sabsel').addEventListener('change',layout);combo(div.querySelector('.csab'),sabores,{newLabel:'Usar'});combo(div.querySelector('.cfor'),function(){var s=fornecedores();FORN_BASE.forEach(function(b){if(!s.some(function(x){return norm(x)===norm(b)}))s.push(b)});return s.sort(function(a,b){return a.localeCompare(b,'pt')})},{newLabel:'Usar'});
  div.querySelector('.cadt').addEventListener('click',function(){var cad=div.querySelector('.cad');div.dataset.cadopen='1';cad.style.display=cad.style.display==='none'?'block':'none'});if(name)layout();
  div.querySelectorAll('.q,.qc,.qu').forEach(function(i){i.addEventListener('input',function(e){e.target.classList.toggle('filled',e.target.value!=='');total()})});
  div.querySelector('.x').addEventListener('click',function(e){e.preventDefault();div.remove();if(!$('rows').children.length)addRow();renum()});
@@ -254,7 +269,7 @@ function addRow(name){
 }
 function rowQty(r){var pc=Number(r.dataset.pc||0);if(pc){var c=r.querySelector('.qc').value,n=r.querySelector('.qu').value;if(c===''&&n==='')return null;return {q:Number(c||0)*pc+Number(n||0),u:'un'}}var q=r.querySelector('.q').value;if(q==='')return null;return {q:Number(q),u:r.querySelector('.u').value}}
 function refreshSelects(){}
-function rowName(r){return r.querySelector('.p').value.trim()}
+function rowName(r){var v=r.querySelector('.p').value.trim();if(!v)return '';if(r.dataset.force==='1')return v;var fl=flavorsOf(v);if(fl.length){var s=r.querySelector('.sabsel').value,hit=fl.filter(function(x){return x.sabor===s})[0];return hit?hit.name:''}return v}
 $('add').addEventListener('click',function(){addRow().querySelector('.p').focus()});
 $('clearAll').addEventListener('click',function(){twoTap($('clearAll'),'Limpar tudo',function(){$('rows').innerHTML='';addRow();$('clearAll').style.display='none'})});
 $('addAll').addEventListener('click',function(){$('clearAll').style.display='';var have=Array.prototype.map.call(document.querySelectorAll('#rows .row'),function(r){return norm(rowName(r))});document.querySelectorAll('#rows .row').forEach(function(r){if(!rowName(r))r.remove()});names().forEach(function(n){if(have.indexOf(norm(n))<0)addRow(n)});renum()});
@@ -372,8 +387,8 @@ $('save').addEventListener('click',function(){
  if(!d){t.textContent='Escolha a data.';t.className='toast err';return}
  if(!w){t.textContent='Escreva o nome de quem está registrando.';t.className='toast err';return}
  document.querySelectorAll('#rows .row').forEach(function(r){var p=rowName(r),rq=rowQty(r);
-  if(!rq)return; if(!p){err='Tem uma linha com quantidade mas sem produto.';return}var u=rq.u,q=rq.q;
-  var tipoSave=(mode==='E'&&contMode==='add')?'I':mode;var k=canon(p)||p;if(r.dataset.isnew){var cs0=r.querySelector('.csab').value.trim();if(cs0&&norm(k).indexOf(norm(cs0))<0){k=k+' '+cs0;k=canon(k)||k}}rows.push({data:d,tipo:tipoSave,produto:k,unidade:u,quantidade:q,quem:w,observacao:o||null});
+  if(!rq)return; if(!p){var pv=r.querySelector('.p').value.trim();err=pv?'Escolha o sabor de "'+pv+'".':'Tem uma linha com quantidade mas sem produto.';return}var u=rq.u,q=rq.q;
+  var tipoSave=(mode==='E'&&contMode==='add')?'I':mode;var k=canon(p)||p;if(r.dataset.force==='1')k=p;if(r.dataset.isnew){var cs0=r.querySelector('.csab').value.trim();if(r.dataset.force==='1'&&!cs0){err='Digite o sabor novo de "'+p+'".';return}if(cs0&&norm(k).indexOf(norm(cs0))<0){k=k+' '+cs0;k=canon(k)||k}}rows.push({data:d,tipo:tipoSave,produto:k,unidade:u,quantidade:q,quem:w,observacao:o||null});
   var pk=norm(k),old=P[pk]||{},cs=r.querySelector('.csab').value.trim(),cf=r.querySelector('.cfor').value.trim(),cp=r.querySelector('.cpc').value,touched=r.dataset.isnew||r.dataset.cadopen;
   prods.push({nome_norm:pk,nome:old.nome||k,unidade:u,minimo:old.minimo==null?null:old.minimo,fornecedor:touched?(cf||null):(old.fornecedor||null),por_caixa:touched?(cp===''?null:Number(cp)):(old.por_caixa||null),sabor:touched?(cs||null):(old.sabor||null),atualizado_em:new Date().toISOString()})});
  if(err){t.textContent=err;t.className='toast err';return}
