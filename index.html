@@ -206,6 +206,7 @@ function fq(n){return String(Math.round(Number(n)*100)/100).replace('.',',')}
 function names(){var seen={},out=[];Object.keys(P).forEach(function(k){seen[k]=1;out.push(P[k].nome)});L.forEach(function(r){var k=norm(r[2]);if(!seen[k]){seen[k]=1;out.push(r[2])}});return out.sort(function(a,b){return a.localeCompare(b,'pt')})}
 function canon(v){var k=norm(v);if(P[k])return P[k].nome;return names().filter(function(n){return norm(n)===k})[0]}
 function unitOf(k){k=norm(k);if(P[k])return P[k].unidade;var r=L.filter(function(x){return norm(x[2])===k}).sort(function(a,b){return a[6]<b[6]?1:-1})[0];return r?r[8]:'un'}
+function qtyUn(r){var pc=pcOf(r[2]);return (r[8]==='cx'&&pc)?Number(r[3])*pc:Number(r[3])}
 function pcOf(k){var p=P[norm(k)];return p&&p.por_caixa?Number(p.por_caixa):null}
 function saborOf(k){var p=P[norm(k)];return p&&p.sabor?p.sabor:''}
 function sabores(){var s=[];Object.keys(P).forEach(function(k){var f=P[k].sabor;if(f&&s.indexOf(f)<0)s.push(f)});return s.sort(function(a,b){return a.localeCompare(b,'pt')})}
@@ -261,11 +262,11 @@ $('obsBtn').addEventListener('click',function(){$('obsBox').style.display='block
 // ---- estoque atual ----
 function current(){var out={};names().forEach(function(k){
   var E=L.filter(function(r){return r[1]==='E'&&norm(r[2])===norm(k)}).sort(function(a,b){return a[0]!==b[0]?(a[0]<b[0]?1:-1):(a[6]<b[6]?1:-1)});
-  var last=E[0],base=last?Number(last[3]):0,since=last?last[0]:'0000-00-00';
+  var last=E[0],base=last?qtyUn(last):0,since=last?last[0]:'0000-00-00';
   var mov=L.filter(function(r){return r[1]!=='E'&&norm(r[2])===norm(k)&&r[0]>since});
-  var inQ=mov.filter(function(r){return r[1]==='I'}).reduce(function(s,r){return s+Number(r[3])},0),outQ=mov.filter(function(r){return r[1]==='C'}).reduce(function(s,r){return s+Number(r[3])},0);
+  var inQ=mov.filter(function(r){return r[1]==='I'}).reduce(function(s,r){return s+qtyUn(r)},0),outQ=mov.filter(function(r){return r[1]==='C'}).reduce(function(s,r){return s+qtyUn(r)},0);
   if(!last&&!mov.length)return;
-  var p=P[norm(k)]||{};out[k]={atual:base+inQ-outQ,last:last,inQ:inQ,outQ:outQ,unidade:p.unidade||(last?last[8]:mov[0][8]),minimo:p.minimo==null?null:Number(p.minimo),pc:p.por_caixa?Number(p.por_caixa):null,fornecedor:p.fornecedor||'',sabor:p.sabor||'',pedido:p.pedido_em?{em:p.pedido_em,por:p.pedido_por||''}:null}});return out}
+  var p=P[norm(k)]||{};out[k]={atual:base+inQ-outQ,last:last,inQ:inQ,outQ:outQ,unidade:(p.por_caixa?'un':(p.unidade||(last?last[8]:mov[0][8]))),minimo:p.minimo==null?null:Number(p.minimo),pc:p.por_caixa?Number(p.por_caixa):null,fornecedor:p.fornecedor||'',sabor:p.sabor||'',pedido:p.pedido_em?{em:p.pedido_em,por:p.pedido_por||''}:null}});return out}
 var TIPO={E:'Contagem',I:'Entrada',C:'Saída'};
 function twoTap(b,label,fn){if(b.dataset.arm){clearTimeout(Number(b.dataset.arm));delete b.dataset.arm;b.textContent=label;fn();return}b.textContent='Confirmar?';b.dataset.arm=String(setTimeout(function(){delete b.dataset.arm;b.textContent=label},3000))}
 function podeApagar(r){return sb&&r[7]&&(Date.now()-new Date(r[6]).getTime())<DEL_DIAS*86400000}
@@ -337,7 +338,7 @@ function renderAtual(){
 function renderEst(){var d=$('vd').value,rows=L.filter(function(r){return r[1]==='E'&&r[0]===d}).sort(function(a,b){return a[2].localeCompare(b[2],'pt')});
  $('estList').innerHTML=rows.length?rows.map(function(r){return '<div class="item"><div><div>'+esc(r[2])+'</div><div class="meta">'+esc(r[4])+(r[5]?' · '+esc(r[5]):'')+'</div></div><div class="qty">'+fq(r[3])+'<small>'+esc(r[8])+'</small></div>'+delBtn(r)+'</div>'}).join(''):'<p class="empty">Nenhuma contagem em '+fd(d)+'.</p>';
  $('sE').textContent=rows.length?rows.length+' produtos':'';bindDel()}
-function movRow(r){return '<div class="item"><div><div class="lbl'+(r[1]==='I'?' in':r[1]==='C'?' out':'')+'">'+TIPO[r[1]]+'</div><div>'+esc(r[2])+'</div><div class="meta">'+esc(r[4])+(r[5]?' · '+esc(r[5]):'')+'</div></div><div class="qty'+(r[1]==='I'?' in':r[1]==='C'?' out':'')+'">'+signed(r)+'<small>'+esc(r[8])+'</small></div>'+delBtn(r)+'</div>'}
+function movRow(r){var pc=pcOf(r[2]),conv=(r[8]==='cx'&&pc)?' <span style="font-size:11px;color:var(--quiet)">= '+fq(Number(r[3])*pc)+' un</span>':'';return '<div class="item"><div><div class="lbl'+(r[1]==='I'?' in':r[1]==='C'?' out':'')+'">'+TIPO[r[1]]+'</div><div>'+esc(r[2])+'</div><div class="meta">'+esc(r[4])+(r[5]?' · '+esc(r[5]):'')+'</div></div><div class="qty'+(r[1]==='I'?' in':r[1]==='C'?' out':'')+'">'+signed(r)+'<small>'+esc(r[8])+'</small></div>'+delBtn(r)+'</div>'}
 var diaTipo='';
 function renderDia(){var d=$('md').value,rows=L.filter(function(r){return r[0]===d&&(!diaTipo||r[1]===diaTipo)}).sort(function(a,b){return a[1]!==b[1]?(a[1]<b[1]?-1:1):a[2].localeCompare(b[2],'pt')});
  var g={E:[],I:[],C:[]};rows.forEach(function(r){g[r[1]].push(r)});var h='';['I','C','E'].forEach(function(k){if(g[k].length)h+='<p class="grouphead">'+{I:'Entradas',C:'Saídas',E:'Contagens'}[k]+' · '+g[k].length+'</p>'+g[k].map(movRow).join('')});
