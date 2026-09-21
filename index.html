@@ -125,6 +125,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
  <button data-t="est">Estoque</button>
  <button data-t="mov">Movimentos</button>
  <button data-t="buy">Compras<span class="badge" id="badge2" style="display:none"></span></button>
+ <button data-t="beb">Bebidas</button>
 </nav>
 <main>
 <section class="pane on" id="reg">
@@ -183,6 +184,45 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <p class="toast" id="manToast"></p>
  </div>
 </section>
+<section class="pane" id="beb">
+ <div class="seg"><button class="on" data-bm="saida">Registrar saída</button><button data-bm="receita">Cadastrar receitas</button></div>
+
+ <div id="bebSaida">
+  <p class="eyebrow">Saída de bebidas</p>
+  <div id="bebRows"></div>
+  <div class="tools"><button class="link" id="bebAdd">+ Adicionar linha</button></div>
+  <button class="btn" id="bebSave">Salvar</button>
+  <p class="toast" id="bebToast"></p>
+
+  <div class="seg" style="margin-top:28px"><button class="on" data-bx="dia">Do dia</button><button data-bx="filtro">Lançamentos por filtro</button></div>
+  <div id="bebXDia">
+   <div class="datebar">Em <input type="date" id="bmd"></div>
+   <div id="bebHist"></div>
+  </div>
+  <div id="bebXFiltro" style="display:none">
+   <div class="two"><div><label for="bcd">De</label><input type="date" id="bcd"></div><div><label for="bcd2">Até</label><input type="date" id="bcd2"></div></div>
+   <div id="bebHistF"></div>
+  </div>
+ </div>
+
+ <div id="bebReceita" style="display:none">
+  <p class="eyebrow">Tamanho do pote</p>
+  <p class="hint" style="margin:-2px 0 12px">Os potes de whey/creatina variam (840g, 750g, 375g...). Informe pra o app calcular "quantos potes restam".</p>
+  <div id="poteList"></div>
+
+  <p class="eyebrow" id="recFormTitulo" style="margin-top:26px">Nova receita</p>
+  <p class="hint" style="margin:-2px 0 12px">Os insumos abaixo já são produtos cadastrados no Estoque.</p>
+  <input type="text" id="recNome" placeholder="Nome da bebida (ex: Shake Chocolate Branco)" style="margin-bottom:14px">
+  <div id="recIngRows"></div>
+  <div class="tools"><button class="link" id="recAddIng">+ Adicionar insumo</button></div>
+  <button class="btn" id="recSave">Salvar receita</button>
+  <button class="link quiet" id="recCancel" style="display:none;margin-top:10px">Cancelar edição</button>
+  <p class="toast" id="recToast"></p>
+
+  <p class="eyebrow" style="margin-top:30px">Receitas cadastradas</p>
+  <div id="recList"></div>
+ </div>
+</section>
 </main>
 </div>
 <script>
@@ -196,12 +236,12 @@ var DEL_DIAS=3;
 var LEADS={I:'O que chegou: compra ou reposição. Soma ao estoque.',C:'O que saiu do bar. Abate do estoque.',E:'Inventário: o número real contado na prateleira. Substitui o estoque atual pelo que você contar.'};
 var QL={E:'Quantidade contada',I:'Quantidade que entrou',C:'Quantidade que saiu'};
 var L=[]; // [data,tipo,produto,qtd,quem,obs,criado_em,id,unidade]
-var P={};var M=[];
+var P={};var M=[];var RECEITAS=[];
 var mode='I', openMin=null, contMode='sub';
 var sb=null; try{ if(SUPABASE_URL.indexOf('https://')===0) sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}catch(e){sb=null}
 var $=function(id){return document.getElementById(id)};
 function isoToday(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')}
-$('d').value=isoToday();$('cd').value=isoToday();$('cd2').value=isoToday();$('vd').value=isoToday();$('md').value=isoToday();$('leadReg').textContent=LEADS.I;
+$('d').value=isoToday();$('cd').value=isoToday();$('cd2').value=isoToday();$('vd').value=isoToday();$('md').value=isoToday();$('bmd').value=isoToday();$('bcd').value=isoToday();$('bcd2').value=isoToday();$('leadReg').textContent=LEADS.I;
 function norm(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()}
 function fd(s){var p=s.split('-');return p[2]+'/'+p[1]}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -375,11 +415,13 @@ function renderAll(){renderMan();renderAtual();renderEst();renderDia();renderMov
 function load(){ if(!sb){renderAll();return Promise.resolve()}
  return Promise.all([
   sb.from('registros').select('id,data,tipo,produto,quantidade,quem,observacao,criado_em,unidade').order('criado_em',{ascending:true}).limit(20000),
-  sb.from('produtos').select('nome_norm,nome,unidade,minimo,fornecedor,por_caixa,sabor,pedido_em,pedido_por'),
-  sb.from('compras_manuais').select('id,produto,unidade,quantidade,quem,criado_em').order('criado_em',{ascending:true})
+  sb.from('produtos').select('nome_norm,nome,unidade,minimo,fornecedor,por_caixa,sabor,pedido_em,pedido_por,pote_g'),
+  sb.from('compras_manuais').select('id,produto,unidade,quantidade,quem,criado_em').order('criado_em',{ascending:true}),
+  sb.from('receitas').select('id,nome,itens,atualizado_em').order('nome',{ascending:true})
  ]).then(function(rs){ if(rs[0].error){$('last').textContent='Não foi possível carregar: '+rs[0].error.message;return}
   L=rs[0].data.map(function(r){return [r.data,r.tipo,r.produto,r.quantidade,r.quem,r.observacao||'',r.criado_em,r.id,r.unidade||'un']});
-  P={};if(!rs[1].error)rs[1].data.forEach(function(p){P[p.nome_norm]=p});M=(rs[2]&&!rs[2].error)?rs[2].data:[];renderAll()});
+  P={};if(!rs[1].error)rs[1].data.forEach(function(p){P[p.nome_norm]=p});M=(rs[2]&&!rs[2].error)?rs[2].data:[];
+  RECEITAS=(rs[3]&&!rs[3].error)?rs[3].data:[];renderAll();renderBeb()});
 }
 // ---- salvar ----
 $('save').addEventListener('click',function(){
@@ -407,7 +449,97 @@ document.querySelectorAll('nav button').forEach(function(b){b.addEventListener('
 ['cd','cd2','cw','ct'].forEach(function(id){$(id).addEventListener('change',renderMov)});$('busca').addEventListener('input',function(){renderAtual()});$('md').addEventListener('change',renderDia);document.querySelectorAll('#segDia button').forEach(function(b){b.addEventListener('click',function(){diaTipo=b.dataset.dt;document.querySelectorAll('#segDia button').forEach(function(x){x.classList.toggle('on',x===b)});renderDia()})});
 document.querySelectorAll('.seg [data-x]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.seg [data-x]').forEach(function(x){x.classList.toggle('on',x===b)});$('xDia').style.display=b.dataset.x==='dia'?'block':'none';$('xFiltro').style.display=b.dataset.x==='filtro'?'block':'none'})});$('vd').addEventListener('change',renderEst);
 document.querySelectorAll('.seg [data-v]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.seg [data-v]').forEach(function(x){x.classList.toggle('on',x===b)});$('vAtual').style.display=b.dataset.v==='atual'?'block':'none';$('vData').style.display=b.dataset.v==='data'?'block':'none'})});
-if(sb){sb.channel('bar').on('postgres_changes',{event:'*',schema:'public',table:'registros'},function(){load()}).on('postgres_changes',{event:'*',schema:'public',table:'produtos'},function(){load()}).on('postgres_changes',{event:'*',schema:'public',table:'compras_manuais'},function(){load()}).subscribe();document.addEventListener('visibilitychange',function(){if(!document.hidden)load()})}
+if(sb){sb.channel('bar').on('postgres_changes',{event:'*',schema:'public',table:'registros'},function(){load()}).on('postgres_changes',{event:'*',schema:'public',table:'produtos'},function(){load()}).on('postgres_changes',{event:'*',schema:'public',table:'compras_manuais'},function(){load()}).on('postgres_changes',{event:'*',schema:'public',table:'receitas'},function(){load()}).subscribe();document.addEventListener('visibilitychange',function(){if(!document.hidden)load()})}
+// ---- Bebidas: receitas, pote, saída ----
+var MEDIDAS=[{v:'10',l:'scoop 10g',kg:0.010},{v:'15',l:'scoop 15g',kg:0.015},{v:'20',l:'scoop 20g',kg:0.020},{v:'250',l:'copo 250ml',kg:0.250},{v:'500',l:'copo 500ml',kg:0.500},{v:'1000',l:'1 litro',kg:1.000},{v:'outro',l:'outro (g)',kg:null}];
+function medKg(medida,custom){var m=MEDIDAS.filter(function(x){return x.v===medida})[0];if(!m)return 0;return m.kg!=null?m.kg:Number(custom||0)/1000}
+function insumosKg(){return names().filter(function(n){return unitOf(n)==='kg'})}
+function poteG(nome){var p=P[norm(nome)];return p&&p.pote_g?Number(p.pote_g):null}
+var XBTN='style="background:none;border:0;color:var(--quiet);font-size:18px;cursor:pointer;padding:0 0 8px"';
+// -- tamanho do pote --
+function poteOptions(sel){function o(v,l){return '<option value="'+v+'"'+(String(sel)===v?' selected':'')+'>'+l+'</option>'}return o('840','840 g')+o('750','750 g')+o('375','375 g')+o('outro','outro (g)')}
+function renderPote(){var kgProds=insumosKg();
+ $('poteList').innerHTML=kgProds.length?kgProds.map(function(n){var g=poteG(n),preset=(g===840||g===750||g===375)?String(g):(g?'outro':'750');
+  return '<div class="two" style="align-items:end;margin-bottom:10px"><div><label>'+esc(n)+'</label><select class="poteSel" data-n="'+esc(n)+'">'+poteOptions(preset)+'</select></div>'+
+   '<div><input type="number" inputmode="decimal" class="poteCustom" placeholder="g" value="'+(preset==='outro'&&g?g:'')+'" style="'+(preset==='outro'?'':'display:none')+'"></div></div>'}).join(''):'<p class="empty">Cadastre um insumo em Kg (ex: Whey) no Estoque primeiro.</p>';
+ document.querySelectorAll('.poteSel').forEach(function(sel){sel.addEventListener('change',function(){var custom=sel.closest('.two').querySelector('.poteCustom');custom.style.display=sel.value==='outro'?'block':'none';if(sel.value!=='outro')salvarPote(sel.dataset.n,Number(sel.value))})});
+ document.querySelectorAll('.poteCustom').forEach(function(inp){inp.addEventListener('change',function(){if(inp.value)salvarPote(inp.closest('.two').querySelector('.poteSel').dataset.n,Number(inp.value))})})}
+function salvarPote(nome,g){if(!sb||!g)return;sb.from('produtos').update({pote_g:g,atualizado_em:new Date().toISOString()}).eq('nome_norm',norm(nome)).then(function(){load()})}
+// -- cadastro de receitas --
+function insOptions(sel){return '<option value="">Insumo</option>'+insumosKg().map(function(n){return '<option value="'+esc(n)+'"'+(sel===n?' selected':'')+'>'+esc(n)+'</option>'}).join('')}
+function medOptionsHtml(sel){return '<option value="">Medida</option>'+MEDIDAS.map(function(m){return '<option value="'+m.v+'"'+(sel===m.v?' selected':'')+'>'+m.l+'</option>'}).join('')}
+function addRecIngRow(prefill){var div=document.createElement('div');div.className='two';div.style.cssText='margin-bottom:10px;grid-template-columns:1fr 1fr 64px 20px;gap:10px';
+ div.innerHTML='<div><select class="ins">'+insOptions(prefill&&prefill.insumo)+'</select></div>'+
+  '<div><select class="med"></select><input type="number" inputmode="decimal" class="medcustom" placeholder="g" style="display:none;margin-top:6px"></div>'+
+  '<div><input type="number" inputmode="decimal" class="qi" placeholder="qtd" value="'+(prefill?prefill.qtd:'')+'"></div>'+
+  '<button type="button" class="x" '+XBTN+'>×</button>';
+ var insSel=div.querySelector('.ins'),medSel=div.querySelector('.med'),custom=div.querySelector('.medcustom');
+ function refreshMed(sel){medSel.innerHTML=medOptionsHtml(sel);custom.style.display=medSel.value==='outro'?'block':'none'}
+ insSel.addEventListener('change',function(){refreshMed()});medSel.addEventListener('change',function(){custom.style.display=medSel.value==='outro'?'block':'none'});
+ div.querySelector('.x').addEventListener('click',function(){div.remove()});
+ $('recIngRows').appendChild(div);
+ if(prefill){refreshMed(prefill.medida);if(prefill.medida==='outro'){custom.style.display='block';custom.value=prefill.custom||''}}else refreshMed()}
+var recEditId=null;
+function resetRecForm(){recEditId=null;$('recFormTitulo').textContent='Nova receita';$('recNome').value='';$('recIngRows').innerHTML='';$('recSave').textContent='Salvar receita';$('recCancel').style.display='none';addRecIngRow()}
+$('recCancel').addEventListener('click',resetRecForm);
+$('recAddIng').addEventListener('click',function(){addRecIngRow()});
+function itemLabel(it){var lbl=it.medida==='outro'?(it.custom+'g'):(MEDIDAS.filter(function(x){return x.v===it.medida})[0]||{}).l;return it.qtd+'× '+lbl+' de '+it.insumo}
+function renderReceitasList(){$('recList').innerHTML=RECEITAS.length?RECEITAS.map(function(r){
+  return '<div class="item"><div><div>'+esc(r.nome)+'</div><div class="meta">'+r.itens.map(itemLabel).join(' · ')+'</div></div><div class="acts"><button class="lnk redit" type="button" data-id="'+r.id+'">editar</button><button class="lnk rdel" type="button" data-id="'+r.id+'">remover</button></div></div>'}).join(''):'<p class="empty">Nenhuma receita cadastrada ainda.</p>';
+ document.querySelectorAll('.redit').forEach(function(b){b.addEventListener('click',function(){var r=RECEITAS.filter(function(x){return String(x.id)===b.dataset.id})[0];if(!r)return;
+  recEditId=r.id;$('recFormTitulo').textContent='Editando receita';$('recNome').value=r.nome;$('recIngRows').innerHTML='';r.itens.forEach(function(it){addRecIngRow(it)});
+  $('recSave').textContent='Salvar alterações';$('recCancel').style.display='inline-block';window.scrollTo({top:0,behavior:'smooth'})})});
+ document.querySelectorAll('.rdel').forEach(function(b){b.addEventListener('click',function(){twoTap(b,'remover',function(){b.disabled=true;sb.from('receitas').delete().eq('id',b.dataset.id).then(function(res){b.disabled=false;if(res.error){b.textContent='não removeu';return}load()})})})})}
+$('recSave').addEventListener('click',function(){var t=$('recToast'),nome=$('recNome').value.trim();
+ if(!nome){t.textContent='Dê um nome pra bebida.';t.className='toast err';return}
+ var itens=[],err='';
+ document.querySelectorAll('#recIngRows > div').forEach(function(r){var ins=r.querySelector('.ins').value,med=r.querySelector('.med').value,q=Number(r.querySelector('.qi').value||0),custom=Number(r.querySelector('.medcustom').value||0);
+  if(!ins&&!med&&!q)return; if(!ins||!med||!q){err='Complete todos os campos de alguma linha de insumo.';return} if(med==='outro'&&!custom){err='Digite o valor em gramas pro insumo "'+ins+'".';return}
+  itens.push({insumo:ins,medida:med,custom:custom,qtd:q})});
+ if(err){t.textContent=err;t.className='toast err';return} if(!itens.length){t.textContent='Adicione ao menos um insumo.';t.className='toast err';return} if(!sb){t.textContent='Sem conexão com o banco.';t.className='toast err';return}
+ t.textContent='Salvando…';t.className='toast';
+ var payload={nome:nome,itens:itens,atualizado_em:new Date().toISOString()};if(recEditId)payload.id=recEditId;
+ sb.from('receitas').upsert(payload,{onConflict:recEditId?'id':'nome'}).then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
+  t.textContent='Receita salva!';t.className='toast ok';resetRecForm();load().then(function(){setTimeout(function(){t.textContent=''},4000)})})});
+// -- registrar saída de bebidas --
+function receitaOptions(sel){return '<option value="">Escolher bebida</option>'+RECEITAS.map(function(r){return '<option value="'+r.id+'"'+(String(sel)===String(r.id)?' selected':'')+'>'+esc(r.nome)+'</option>'}).join('')}
+function addBebRow(){var div=document.createElement('div');div.className='two';div.style.cssText='margin-bottom:10px;grid-template-columns:1fr 80px 20px;gap:10px';
+ div.innerHTML='<div><select class="btipo">'+receitaOptions()+'</select></div><div><input type="number" inputmode="decimal" class="bqtd" placeholder="qtd"></div><button type="button" class="x" '+XBTN+'>×</button>';
+ div.querySelector('.x').addEventListener('click',function(){div.remove()});$('bebRows').appendChild(div)}
+$('bebAdd').addEventListener('click',function(){addBebRow()});
+function refreshBebSelects(){document.querySelectorAll('#bebRows .btipo').forEach(function(s){var v=s.value;s.innerHTML=receitaOptions(v)})}
+$('bebSave').addEventListener('click',function(){var t=$('bebToast'),d=$('bmd').value||isoToday(),w=whoName(),err='';
+ if(!w){t.textContent='Escolha "Quem" na aba Registrar antes de salvar aqui.';t.className='toast err';return}
+ var rows=[];
+ document.querySelectorAll('#bebRows > div').forEach(function(r){var sel=r.querySelector('.btipo'),qEl=r.querySelector('.bqtd'),n=Number(qEl.value||0);
+  if(!n)return; if(!sel.value){err='Escolha a bebida em alguma linha preenchida.';return}
+  var receita=RECEITAS.filter(function(x){return String(x.id)===sel.value})[0];if(!receita)return;
+  receita.itens.forEach(function(it){var kgUn=medKg(it.medida,it.custom),qtd=Math.round(it.qtd*kgUn*n*1000)/1000;
+   rows.push({data:d,tipo:'C',produto:it.insumo,unidade:'kg',quantidade:qtd,quem:w,observacao:'Bebida: '+n+'x '+receita.nome})})});
+ if(err){t.textContent=err;t.className='toast err';return} if(!rows.length){t.textContent='Preencha ao menos uma linha.';t.className='toast err';return} if(!sb){t.textContent='Sem conexão com o banco.';t.className='toast err';return}
+ t.textContent='Salvando…';t.className='toast';
+ sb.from('registros').insert(rows).then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
+  t.textContent='Salvo! '+rows.length+' lançamento(s) de estoque.';t.className='toast ok';$('bebRows').innerHTML='';addBebRow();
+  load().then(function(){setTimeout(function(){t.textContent=''},4000)})})});
+// -- histórico de saída de bebidas --
+function renderBebHist(){var d=$('bmd').value,rows=L.filter(function(r){return r[0]===d&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),groups={};
+ rows.forEach(function(r){(groups[r[5]]=groups[r[5]]||[]).push(r)});var keys=Object.keys(groups);
+ $('bebHist').innerHTML=keys.length?keys.map(function(k){var g=groups[k],det=g.map(function(r){return esc(r[2])+': −'+fq(r[3])+' '+r[8]}).join(' · ');
+  return '<div class="item"><div><div>'+esc(k.replace('Bebida: ',''))+'</div><div class="meta">'+det+'</div></div></div>'}).join(''):'<p class="empty">Nenhuma saída de bebida em '+fd(d)+'.</p>'}
+function renderBebFiltro(){var d1=$('bcd').value,d2=$('bcd2').value||d1,rows=L.filter(function(r){return r[0]>=d1&&r[0]<=d2&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),groups={};
+ rows.forEach(function(r){var k=r[0]+'|'+r[5];(groups[k]=groups[k]||[]).push(r)});var keys=Object.keys(groups).sort();
+ if(!keys.length){$('bebHistF').innerHTML='<p class="empty">Nenhuma saída de bebida no período.</p>';return}
+ var lastD=null,h='';keys.forEach(function(k){var i=k.indexOf('|'),d=k.slice(0,i),obs=k.slice(i+1);if(d!==lastD){lastD=d;h+='<p class="dayhead">'+fd(d)+'</p>'}
+  var g=groups[k],det=g.map(function(r){return esc(r[2])+': −'+fq(r[3])+' '+r[8]}).join(' · ');h+='<div class="item"><div><div>'+esc(obs.replace('Bebida: ',''))+'</div><div class="meta">'+det+'</div></div></div>'});
+ $('bebHistF').innerHTML=h}
+function renderBeb(){renderPote();renderReceitasList();refreshBebSelects();renderBebHist();renderBebFiltro()}
+// -- alternância de sub-modos --
+document.querySelectorAll('#beb .seg [data-bm]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#beb .seg [data-bm]').forEach(function(x){x.classList.toggle('on',x===b)});
+ $('bebSaida').style.display=b.dataset.bm==='saida'?'block':'none';$('bebReceita').style.display=b.dataset.bm==='receita'?'block':'none'})});
+document.querySelectorAll('#beb .seg [data-bx]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#beb .seg [data-bx]').forEach(function(x){x.classList.toggle('on',x===b)});
+ $('bebXDia').style.display=b.dataset.bx==='dia'?'block':'none';$('bebXFiltro').style.display=b.dataset.bx==='filtro'?'block':'none'})});
+$('bmd').addEventListener('change',renderBebHist);['bcd','bcd2'].forEach(function(id){$(id).addEventListener('change',renderBebFiltro)});
+addBebRow();resetRecForm();
 load();
 // ---- exportar (CSV para Excel) ----
 function csvCell(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
