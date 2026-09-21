@@ -211,7 +211,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <div id="poteList"></div>
 
   <p class="eyebrow" id="recFormTitulo" style="margin-top:26px">Nova receita</p>
-  <p class="hint" style="margin:-2px 0 12px">Os insumos abaixo já são produtos cadastrados no Estoque.</p>
+  <p class="hint" style="margin:-2px 0 12px">Digite um insumo já cadastrado no Estoque, ou um nome novo — ele é criado em Kg automaticamente.</p>
   <input type="text" id="recNome" placeholder="Nome da bebida (ex: Shake Chocolate Branco)" style="margin-bottom:14px">
   <div id="recIngRows"></div>
   <div class="tools"><button class="link" id="recAddIng">+ Adicionar insumo</button></div>
@@ -469,13 +469,14 @@ function salvarPote(nome,g){if(!sb||!g)return;sb.from('produtos').update({pote_g
 function insOptions(sel){return '<option value="">Insumo</option>'+insumosKg().map(function(n){return '<option value="'+esc(n)+'"'+(sel===n?' selected':'')+'>'+esc(n)+'</option>'}).join('')}
 function medOptionsHtml(sel){return '<option value="">Medida</option>'+MEDIDAS.map(function(m){return '<option value="'+m.v+'"'+(sel===m.v?' selected':'')+'>'+m.l+'</option>'}).join('')}
 function addRecIngRow(prefill){var div=document.createElement('div');div.className='two';div.style.cssText='margin-bottom:10px;grid-template-columns:1fr 1fr 64px 20px;gap:10px';
- div.innerHTML='<div><select class="ins">'+insOptions(prefill&&prefill.insumo)+'</select></div>'+
+ div.innerHTML='<div><input type="text" class="ins" placeholder="Insumo" autocomplete="off" value="'+esc(prefill?prefill.insumo:'')+'"></div>'+
   '<div><select class="med"></select><input type="number" inputmode="decimal" class="medcustom" placeholder="g" style="display:none;margin-top:6px"></div>'+
   '<div><input type="number" inputmode="decimal" class="qi" placeholder="qtd" value="'+(prefill?prefill.qtd:'')+'"></div>'+
   '<button type="button" class="x" '+XBTN+'>×</button>';
- var insSel=div.querySelector('.ins'),medSel=div.querySelector('.med'),custom=div.querySelector('.medcustom');
+ var medSel=div.querySelector('.med'),custom=div.querySelector('.medcustom');
  function refreshMed(sel){medSel.innerHTML=medOptionsHtml(sel);custom.style.display=medSel.value==='outro'?'block':'none'}
- insSel.addEventListener('change',function(){refreshMed()});medSel.addEventListener('change',function(){custom.style.display=medSel.value==='outro'?'block':'none'});
+ combo(div.querySelector('.ins'),insumosKg,{newLabel:'Criar novo insumo'});
+ medSel.addEventListener('change',function(){custom.style.display=medSel.value==='outro'?'block':'none'});
  div.querySelector('.x').addEventListener('click',function(){div.remove()});
  $('recIngRows').appendChild(div);
  if(prefill){refreshMed(prefill.medida);if(prefill.medida==='outro'){custom.style.display='block';custom.value=prefill.custom||''}}else refreshMed()}
@@ -492,15 +493,19 @@ function renderReceitasList(){$('recList').innerHTML=RECEITAS.length?RECEITAS.ma
  document.querySelectorAll('.rdel').forEach(function(b){b.addEventListener('click',function(){twoTap(b,'remover',function(){b.disabled=true;sb.from('receitas').delete().eq('id',b.dataset.id).then(function(res){b.disabled=false;if(res.error){b.textContent='não removeu';return}load()})})})})}
 $('recSave').addEventListener('click',function(){var t=$('recToast'),nome=$('recNome').value.trim();
  if(!nome){t.textContent='Dê um nome pra bebida.';t.className='toast err';return}
- var itens=[],err='';
- document.querySelectorAll('#recIngRows > div').forEach(function(r){var ins=r.querySelector('.ins').value,med=r.querySelector('.med').value,q=Number(r.querySelector('.qi').value||0),custom=Number(r.querySelector('.medcustom').value||0);
-  if(!ins&&!med&&!q)return; if(!ins||!med||!q){err='Complete todos os campos de alguma linha de insumo.';return} if(med==='outro'&&!custom){err='Digite o valor em gramas pro insumo "'+ins+'".';return}
-  itens.push({insumo:ins,medida:med,custom:custom,qtd:q})});
+ var itens=[],novos=[],err='';
+ document.querySelectorAll('#recIngRows > div').forEach(function(r){var insRaw=r.querySelector('.ins').value.trim(),med=r.querySelector('.med').value,q=Number(r.querySelector('.qi').value||0),custom=Number(r.querySelector('.medcustom').value||0);
+  if(!insRaw&&!med&&!q)return; if(!insRaw||!med||!q){err='Complete todos os campos de alguma linha de insumo.';return} if(med==='outro'&&!custom){err='Digite o valor em gramas pro insumo "'+insRaw+'".';return}
+  var ins=canon(insRaw)||insRaw;itens.push({insumo:ins,medida:med,custom:custom,qtd:q});
+  if(!canon(insRaw)&&!novos.some(function(p){return p.nome_norm===norm(insRaw)}))novos.push({nome_norm:norm(insRaw),nome:insRaw,unidade:'kg',atualizado_em:new Date().toISOString()})});
  if(err){t.textContent=err;t.className='toast err';return} if(!itens.length){t.textContent='Adicione ao menos um insumo.';t.className='toast err';return} if(!sb){t.textContent='Sem conexão com o banco.';t.className='toast err';return}
  t.textContent='Salvando…';t.className='toast';
  var payload={nome:nome,itens:itens,atualizado_em:new Date().toISOString()};if(recEditId)payload.id=recEditId;
- sb.from('receitas').upsert(payload,{onConflict:recEditId?'id':'nome'}).then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
-  t.textContent='Receita salva!';t.className='toast ok';resetRecForm();load().then(function(){setTimeout(function(){t.textContent=''},4000)})})});
+ var salvarReceita=function(){return sb.from('receitas').upsert(payload,{onConflict:recEditId?'id':'nome'})};
+ (novos.length?sb.from('produtos').upsert(novos):Promise.resolve({error:null})).then(function(resProd){
+  if(resProd.error){t.textContent='Não salvou o(s) insumo(s) novo(s): '+resProd.error.message;t.className='toast err';return}
+  salvarReceita().then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
+  t.textContent='Receita salva!';t.className='toast ok';resetRecForm();load().then(function(){setTimeout(function(){t.textContent=''},4000)})})})});
 // -- registrar saída de bebidas --
 function receitaOptions(sel){return '<option value="">Escolher bebida</option>'+RECEITAS.map(function(r){return '<option value="'+r.id+'"'+(String(sel)===String(r.id)?' selected':'')+'>'+esc(r.nome)+'</option>'}).join('')}
 function addBebRow(){var div=document.createElement('div');div.className='two';div.style.cssText='margin-bottom:10px;grid-template-columns:1fr 80px 20px;gap:10px';
