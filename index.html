@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400;0,500;1,400;1,500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--oceano:#0c1f32;--dourado:#cba052;--areia:#efe4ce;--branco:#ffffff;--preto:#222223;--salvia:#809e80;--verde:#3f7a4a;--vermelho:#b3261e;--rule:rgba(12,31,50,.18);--quiet:rgba(12,31,50,.62)}
 *{box-sizing:border-box}
@@ -133,7 +134,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
  <p class="lead" id="leadReg"></p>
  <div class="two">
   <div><label for="d">Data</label><input type="date" id="d"></div>
-  <div><label for="w">Quem</label><select id="w"><option>Fernanda</option><option>João Rafael</option><option>João Viana</option><option>Pedro Henrique</option><option>Guilherme</option><option>Marcela</option><option value="__other__">Outro (digitar)</option></select><input type="text" id="wo" placeholder="Nome" style="display:none;margin-top:8px"></div>
+  <div><label for="w">Quem</label><select id="w"><option>Fernanda</option><option>João Rafael</option><option>André Bicalho</option><option>João Viana</option><option>Pedro Henrique</option><option>Guilherme</option><option>Marcela</option><option value="__other__">Outro (digitar)</option></select><input type="text" id="wo" placeholder="Nome" style="display:none;margin-top:8px"></div>
  </div>
  <div id="rows"></div>
  <div class="tools"><button class="link" id="add">+ Adicionar linha</button><button class="link quiet" id="addAll">+ Todos os produtos</button><button class="link quiet" id="clearAll" style="display:none">Limpar tudo</button><button class="link quiet" id="obsBtn">+ Observação</button></div>
@@ -167,7 +168,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <p class="datebar" style="margin:4px 0 0"><span class="n" id="sC"></span></p>
   <div id="movList"></div>
  </div>
- <div class="tools" style="margin-top:28px;border-top:1px solid var(--dourado);padding-top:14px"><button class="link quiet" id="expAll">Exportar todos os lançamentos (Excel)</button><button class="link quiet" id="expEst">Exportar estoque atual (Excel)</button></div>
+ <div class="tools" style="margin-top:28px;border-top:1px solid var(--dourado);padding-top:14px"><button class="link" id="expXlsx">Baixar relatório completo (Excel)</button><button class="link quiet" id="expAll">Lançamentos (CSV)</button><button class="link quiet" id="expEst">Estoque (CSV)</button></div>
 </section>
 <section class="pane" id="buy">
  <p class="eyebrow">Minha lista de compras</p>
@@ -179,7 +180,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
  <div id="manForm" style="display:none;border-top:1px solid var(--rule);padding-top:12px;margin-top:8px">
   <label>Produto</label><input type="text" id="mpn" placeholder="Produto" autocomplete="off">
   <div class="two" style="margin-top:12px"><div><label>Quantidade</label><input type="number" inputmode="decimal" step="0.5" min="0" id="mq" placeholder="–"></div><div><label>Unidade</label><select id="mu"></select></div></div>
-  <div class="two"><div><label>Quem está adicionando</label><select id="mw"><option value="">Escolher</option><option>Fernanda</option><option>João Rafael</option><option>João Viana</option><option>Pedro Henrique</option><option>Guilherme</option><option>Marcela</option><option value="__other__">Outro (digitar)</option></select><input type="text" id="mwo" placeholder="Nome" style="display:none;margin-top:8px"></div></div>
+  <div class="two"><div><label>Quem está adicionando</label><select id="mw"><option value="">Escolher</option><option>Fernanda</option><option>João Rafael</option><option>André Bicalho</option><option>João Viana</option><option>Pedro Henrique</option><option>Guilherme</option><option>Marcela</option><option value="__other__">Outro (digitar)</option></select><input type="text" id="mwo" placeholder="Nome" style="display:none;margin-top:8px"></div></div>
   <button class="btn" id="manSave" style="margin-top:8px">Adicionar à lista</button>
   <p class="toast" id="manToast"></p>
  </div>
@@ -189,6 +190,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
  <div id="bebSaida">
   <p class="eyebrow">Saída de bebidas</p>
+  <div class="two"><div><label for="bd">Data</label><input type="date" id="bd"></div><div><label for="bw">Quem</label><select id="bw"><option value="">Escolher</option><option>Fernanda</option><option>João Rafael</option><option>André Bicalho</option><option>João Viana</option><option>Pedro Henrique</option><option>Guilherme</option><option>Marcela</option><option value="__other__">Outro (digitar)</option></select><input type="text" id="bwo" placeholder="Nome" style="display:none;margin-top:8px"></div></div>
   <div id="bebRows"></div>
   <div class="tools"><button class="link" id="bebAdd">+ Adicionar linha</button></div>
   <button class="btn" id="bebSave">Salvar</button>
@@ -211,12 +213,16 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <input type="text" id="recNome" placeholder="Nome da bebida (ex: Shake Chocolate Branco)" style="margin-bottom:14px">
   <div id="recIngRows"></div>
   <div class="tools"><button class="link" id="recAddIng">+ Adicionar insumo</button></div>
+  <div id="recSenhaBox" style="display:none;margin-top:8px"><label for="recSenha">Senha para alterar receitas</label><input type="password" id="recSenha" placeholder="Senha" autocomplete="current-password"></div>
   <button class="btn" id="recSave">Salvar receita</button>
   <button class="link quiet" id="recCancel" style="display:none;margin-top:10px">Cancelar edição</button>
   <p class="toast" id="recToast"></p>
 
   <p class="eyebrow" style="margin-top:30px">Receitas cadastradas</p>
   <div id="recList"></div>
+  <div id="recDelBox" style="display:none;margin-top:12px;border-top:1px solid var(--rule);padding-top:10px"><p class="hint" id="recDelTxt" style="margin-bottom:6px"></p><div class="two"><div><label for="recDelSenha">Senha</label><input type="password" id="recDelSenha" placeholder="Senha" autocomplete="current-password"></div><div style="display:flex;align-items:flex-end;gap:10px"><button type="button" class="btn" id="recDelOk" style="margin:0;padding:12px">Remover</button><button type="button" class="link quiet" id="recDelCancel">cancelar</button></div></div><p class="toast" id="recDelToast"></p></div>
+  <div class="tools" style="margin-top:22px"><button class="link quiet" id="pwdBtn">Trocar senha das receitas</button></div>
+  <div id="pwdBox" style="display:none;margin-top:8px"><div class="two"><div><label for="pwdAtual">Senha atual</label><input type="password" id="pwdAtual"></div><div><label for="pwdNova">Senha nova</label><input type="password" id="pwdNova"></div></div><button type="button" class="btn" id="pwdOk" style="margin-top:8px">Trocar senha</button><p class="toast" id="pwdToast"></p></div>
  </div>
 </section>
 </main>
@@ -237,7 +243,7 @@ var mode='I', openMin=null, contMode='sub';
 var sb=null; try{ if(SUPABASE_URL.indexOf('https://')===0) sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}catch(e){sb=null}
 var $=function(id){return document.getElementById(id)};
 function isoToday(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')}
-$('d').value=isoToday();$('cd').value=isoToday();$('cd2').value=isoToday();$('vd').value=isoToday();$('md').value=isoToday();$('bmd').value=isoToday();$('bcd').value=isoToday();$('bcd2').value=isoToday();$('leadReg').textContent=LEADS.I;
+$('d').value=isoToday();$('cd').value=isoToday();$('cd2').value=isoToday();$('vd').value=isoToday();$('md').value=isoToday();$('bmd').value=isoToday();$('bd').value=isoToday();$('bw').addEventListener('change',function(){$('bwo').style.display=$('bw').value==='__other__'?'block':'none'});$('bcd').value=isoToday();$('bcd2').value=isoToday();$('leadReg').textContent=LEADS.I;
 function norm(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()}
 function fd(s){var p=s.split('-');return p[2]+'/'+p[1]}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -482,7 +488,7 @@ function addRecIngRow(prefill){var div=document.createElement('div');div.classNa
  updateInsHint();
  if(prefill){refreshMed(prefill.medida);if(prefill.medida==='outro'){custom.style.display='block';custom.value=prefill.custom||''}}else refreshMed()}
 var recEditId=null;
-function resetRecForm(){recEditId=null;$('recFormTitulo').textContent='Nova receita';$('recNome').value='';$('recIngRows').innerHTML='';$('recSave').textContent='Salvar receita';$('recCancel').style.display='none';addRecIngRow()}
+function resetRecForm(){recEditId=null;$('recSenhaBox').style.display='none';$('recSenha').value='';$('recFormTitulo').textContent='Nova receita';$('recNome').value='';$('recIngRows').innerHTML='';$('recSave').textContent='Salvar receita';$('recCancel').style.display='none';addRecIngRow()}
 $('recCancel').addEventListener('click',resetRecForm);
 $('recAddIng').addEventListener('click',function(){addRecIngRow()});
 function itemLabel(it){var lbl=it.medida==='outro'?(it.custom+'g'):(MEDIDAS.filter(function(x){return x.v===it.medida})[0]||{}).l;return it.qtd+'× '+lbl+' de '+it.insumo}
@@ -490,8 +496,14 @@ function renderReceitasList(){$('recList').innerHTML=RECEITAS.length?RECEITAS.ma
   return '<div class="item"><div><div>'+esc(r.nome)+'</div><div class="meta">'+r.itens.map(itemLabel).join(' · ')+'</div></div><div class="acts"><button class="lnk redit" type="button" data-id="'+r.id+'">editar</button><button class="lnk rdel" type="button" data-id="'+r.id+'">remover</button></div></div>'}).join(''):'<p class="empty">Nenhuma receita cadastrada ainda.</p>';
  document.querySelectorAll('.redit').forEach(function(b){b.addEventListener('click',function(){var r=RECEITAS.filter(function(x){return String(x.id)===b.dataset.id})[0];if(!r)return;
   recEditId=r.id;$('recFormTitulo').textContent='Editando receita';$('recNome').value=r.nome;$('recIngRows').innerHTML='';r.itens.forEach(function(it){addRecIngRow(it)});
-  $('recSave').textContent='Salvar alterações';$('recCancel').style.display='inline-block';window.scrollTo({top:0,behavior:'smooth'})})});
- document.querySelectorAll('.rdel').forEach(function(b){b.addEventListener('click',function(){twoTap(b,'remover',function(){b.disabled=true;sb.from('receitas').delete().eq('id',b.dataset.id).then(function(res){b.disabled=false;if(res.error){b.textContent='não removeu';return}load()})})})})}
+  $('recSave').textContent='Salvar alterações';$('recCancel').style.display='inline-block';$('recSenhaBox').style.display='block';$('recSenha').value='';window.scrollTo({top:0,behavior:'smooth'})})});
+ document.querySelectorAll('.rdel').forEach(function(b){b.addEventListener('click',function(){var r=RECEITAS.filter(function(x){return String(x.id)===b.dataset.id})[0];if(!r)return;recDelId=r.id;$('recDelTxt').textContent='Remover "'+r.nome+'"? Digite a senha para confirmar.';$('recDelBox').style.display='block';$('recDelSenha').value='';$('recDelToast').textContent='';$('recDelSenha').focus()})})}
+var recDelId=null;
+$('recDelCancel').addEventListener('click',function(){recDelId=null;$('recDelBox').style.display='none'});
+$('recDelOk').addEventListener('click',function(){var t=$('recDelToast'),s=$('recDelSenha').value;if(!s){t.textContent='Digite a senha.';t.className='toast err';return}$('recDelOk').disabled=true;
+ sb.rpc('receita_excluir',{p_senha:s,p_id:recDelId}).then(function(res){$('recDelOk').disabled=false;if(res.error){t.textContent=res.error.message.replace(/^.*?: /,'');t.className='toast err';return}recDelId=null;$('recDelBox').style.display='none';load()})});
+$('pwdBtn').addEventListener('click',function(){$('pwdBox').style.display=$('pwdBox').style.display==='none'?'block':'none'});
+$('pwdOk').addEventListener('click',function(){var t=$('pwdToast');$('pwdOk').disabled=true;sb.rpc('trocar_senha_receitas',{p_atual:$('pwdAtual').value,p_nova:$('pwdNova').value}).then(function(res){$('pwdOk').disabled=false;if(res.error){t.textContent=res.error.message.replace(/^.*?: /,'');t.className='toast err';return}t.textContent='Senha trocada.';t.className='toast ok';$('pwdAtual').value='';$('pwdNova').value='';setTimeout(function(){$('pwdBox').style.display='none';t.textContent=''},2500)})});
 $('recSave').addEventListener('click',function(){var t=$('recToast'),nome=$('recNome').value.trim();
  if(!nome){t.textContent='Dê um nome pra bebida.';t.className='toast err';return}
  var itens=[],novos=[],err='';
@@ -502,7 +514,7 @@ $('recSave').addEventListener('click',function(){var t=$('recToast'),nome=$('rec
  if(err){t.textContent=err;t.className='toast err';return} if(!itens.length){t.textContent='Adicione ao menos um insumo.';t.className='toast err';return} if(!sb){t.textContent='Sem conexão com o banco.';t.className='toast err';return}
  t.textContent='Salvando…';t.className='toast';
  var payload={nome:nome,itens:itens,atualizado_em:new Date().toISOString()};if(recEditId)payload.id=recEditId;
- var salvarReceita=function(){return sb.from('receitas').upsert(payload,{onConflict:recEditId?'id':'nome'})};
+ var salvarReceita=function(){if(recEditId){var s=$('recSenha').value;if(!s)return Promise.resolve({error:{message:'Digite a senha para salvar a alteração.'}});return sb.rpc('receita_editar',{p_senha:s,p_id:recEditId,p_nome:nome,p_itens:itens})}return sb.from('receitas').insert(payload)};
  (novos.length?sb.from('produtos').upsert(novos):Promise.resolve({error:null})).then(function(resProd){
   if(resProd.error){t.textContent='Não salvou o(s) insumo(s) novo(s): '+resProd.error.message;t.className='toast err';return}
   salvarReceita().then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
@@ -514,8 +526,8 @@ function addBebRow(){var div=document.createElement('div');div.className='two';d
  div.querySelector('.x').addEventListener('click',function(){div.remove()});$('bebRows').appendChild(div)}
 $('bebAdd').addEventListener('click',function(){addBebRow()});
 function refreshBebSelects(){document.querySelectorAll('#bebRows .btipo').forEach(function(s){var v=s.value;s.innerHTML=receitaOptions(v)})}
-$('bebSave').addEventListener('click',function(){var t=$('bebToast'),d=$('bmd').value||isoToday(),w=whoName(),err='';
- if(!w){t.textContent='Escolha "Quem" na aba Registrar antes de salvar aqui.';t.className='toast err';return}
+$('bebSave').addEventListener('click',function(){var t=$('bebToast'),d=$('bd').value||isoToday(),w=$('bw').value==='__other__'?$('bwo').value.trim():$('bw').value,err='';
+ if(!w){t.textContent='Escolha quem está registrando.';t.className='toast err';return}
  var rows=[];
  document.querySelectorAll('#bebRows > div').forEach(function(r){var sel=r.querySelector('.btipo'),qEl=r.querySelector('.bqtd'),n=Number(qEl.value||0);
   if(!n)return; if(!sel.value){err='Escolha a bebida em alguma linha preenchida.';return}
@@ -525,19 +537,16 @@ $('bebSave').addEventListener('click',function(){var t=$('bebToast'),d=$('bmd').
  if(err){t.textContent=err;t.className='toast err';return} if(!rows.length){t.textContent='Preencha ao menos uma linha.';t.className='toast err';return} if(!sb){t.textContent='Sem conexão com o banco.';t.className='toast err';return}
  t.textContent='Salvando…';t.className='toast';
  sb.from('registros').insert(rows).then(function(res){if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
-  t.textContent='Salvo! '+rows.length+' lançamento(s) de estoque.';t.className='toast ok';$('bebRows').innerHTML='';addBebRow();
+  t.textContent='Saída de bebidas salva em '+fd(d)+' por '+w+'.';t.className='toast ok';$('bebRows').innerHTML='';addBebRow();$('bmd').value=d;
   load().then(function(){setTimeout(function(){t.textContent=''},4000)})})});
 // -- histórico de saída de bebidas --
-function renderBebHist(){var d=$('bmd').value,rows=L.filter(function(r){return r[0]===d&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),groups={};
- rows.forEach(function(r){(groups[r[5]]=groups[r[5]]||[]).push(r)});var keys=Object.keys(groups);
- $('bebHist').innerHTML=keys.length?keys.map(function(k){var g=groups[k],det=g.map(function(r){return esc(r[2])+': −'+fq(r[3])+' '+r[8]}).join(' · ');
-  return '<div class="item"><div><div>'+esc(k.replace('Bebida: ',''))+'</div><div class="meta">'+det+'</div></div></div>'}).join(''):'<p class="empty">Nenhuma saída de bebida em '+fd(d)+'.</p>'}
-function renderBebFiltro(){var d1=$('bcd').value,d2=$('bcd2').value||d1,rows=L.filter(function(r){return r[0]>=d1&&r[0]<=d2&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),groups={};
- rows.forEach(function(r){var k=r[0]+'|'+r[5];(groups[k]=groups[k]||[]).push(r)});var keys=Object.keys(groups).sort();
- if(!keys.length){$('bebHistF').innerHTML='<p class="empty">Nenhuma saída de bebida no período.</p>';return}
- var lastD=null,h='';keys.forEach(function(k){var i=k.indexOf('|'),d=k.slice(0,i),obs=k.slice(i+1);if(d!==lastD){lastD=d;h+='<p class="dayhead">'+fd(d)+'</p>'}
-  var g=groups[k],det=g.map(function(r){return esc(r[2])+': −'+fq(r[3])+' '+r[8]}).join(' · ');h+='<div class="item"><div><div>'+esc(obs.replace('Bebida: ',''))+'</div><div class="meta">'+det+'</div></div></div>'});
- $('bebHistF').innerHTML=h}
+function bebGroups(rows){var groups={};rows.forEach(function(r){var k=r[0]+'|'+r[5]+'|'+r[4]+'|'+r[6].slice(0,16);(groups[k]=groups[k]||[]).push(r)});return Object.keys(groups).sort().reverse().map(function(k){var g=groups[k],m=/^Bebida: (\d+(?:[.,]\d+)?)x (.*)$/.exec(g[0][5]);return {data:g[0][0],quem:g[0][4],hora:fmtTs(g[0][6]).split(' às ')[1],qtd:m?Number(m[1].replace(',','.')):null,bebida:m?m[2]:g[0][5].replace('Bebida: ',''),rows:g}})}
+function bebItem(b){return '<div class="item"><div><div>'+esc(b.bebida)+'</div><div class="meta">'+esc(b.quem)+' · '+b.hora+' · '+b.rows.map(function(r){return esc(r[2])+' −'+fq(r[3])+' '+r[8]}).join(' · ')+'</div></div><div class="qty out">'+(b.qtd!=null?fq(b.qtd):'')+'<small>un</small></div></div>'}
+function renderBebHist(){var d=$('bmd').value,rows=L.filter(function(r){return r[0]===d&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),gs=bebGroups(rows);
+ $('bebHist').innerHTML=gs.length?gs.map(bebItem).join(''):'<p class="empty">Nenhuma saída de bebida em '+fd(d)+'.</p>'}
+function renderBebFiltro(){var d1=$('bcd').value,d2=$('bcd2').value||d1,rows=L.filter(function(r){return r[0]>=d1&&r[0]<=d2&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),gs=bebGroups(rows);
+ if(!gs.length){$('bebHistF').innerHTML='<p class="empty">Nenhuma saída de bebida no período.</p>';return}
+ var lastD=null,h='';gs.forEach(function(b){if(b.data!==lastD){lastD=b.data;h+='<p class="dayhead">'+fd(b.data)+'</p>'}h+=bebItem(b)});$('bebHistF').innerHTML=h}
 function renderBeb(){renderReceitasList();refreshBebSelects();renderBebHist();renderBebFiltro()}
 // -- alternância de sub-modos --
 document.querySelectorAll('#beb .seg [data-bm]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#beb .seg [data-bm]').forEach(function(x){x.classList.toggle('on',x===b)});
@@ -551,6 +560,25 @@ load();
 function csvCell(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
 function baixar(nome,linhas){var txt='\ufeff'+linhas.map(function(l){return l.map(csvCell).join(';')}).join('\r\n');
  var blob=new Blob([txt],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},2000)}
+function dtBR(iso){var p=iso.split('-');return p[2]+'/'+p[1]+'/'+p[0]}
+function hrBR(ts){var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+$('expXlsx').addEventListener('click',function(){if(typeof XLSX==='undefined'){alert('Sem conexão para gerar o Excel. Tente de novo.');return}
+ var wb=XLSX.utils.book_new();
+ var lan=[['Data','Hora do registro','Tipo','Produto','Quantidade','Unidade','Quem registrou','Observação']];
+ L.slice().sort(function(a,b){return a[0]!==b[0]?(a[0]<b[0]?-1:1):(a[6]<b[6]?-1:1)}).forEach(function(r){lan.push([dtBR(r[0]),hrBR(r[6]),TIPO[r[1]],r[2],Number(r[3]),r[8],r[4],r[5]])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(lan),'Lançamentos');
+ var sai=[['Data','Hora do registro','Produto','Quantidade','Unidade','Quem registrou','Observação']];
+ L.filter(function(r){return r[1]==='C'}).sort(function(a,b){return a[0]<b[0]?-1:1}).forEach(function(r){sai.push([dtBR(r[0]),hrBR(r[6]),r[2],Number(r[3]),r[8],r[4],r[5]])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sai),'Saídas');
+ var beb=[['Data','Hora do registro','Bebida','Quantidade','Quem registrou','Insumos descontados']];
+ bebGroups(L.filter(function(r){return r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0})).reverse().forEach(function(b){beb.push([dtBR(b.data),b.hora,b.bebida,b.qtd,b.quem,b.rows.map(function(r){return r[2]+' '+fq(r[3])+' '+r[8]}).join('; ')])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(beb),'Saída de bebidas');
+ var c=current(),est=[['Produto','Sabor','Estoque atual','Unidade','Un. por caixa','Fornecedor','Última contagem','Contado por','Entradas desde','Saídas desde','Mínimo']];
+ Object.keys(c).sort(function(a,b){return a.localeCompare(b,'pt')}).forEach(function(k){var x=c[k];est.push([k,x.sabor,Number(fq(x.atual).replace(',','.')),x.unidade,x.pc||'',x.fornecedor,x.last?dtBR(x.last[0]):'',x.last?x.last[4]:'',x.inQ,x.outQ,x.minimo==null?'':x.minimo])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(est),'Estoque atual');
+ var rec=[['Bebida','Insumo','Quantidade','Medida']];RECEITAS.forEach(function(r){r.itens.forEach(function(it){rec.push([r.nome,it.insumo,it.qtd,itemLabel(it)])})});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rec),'Receitas');
+ XLSX.writeFile(wb,'relatorio-bar-'+isoToday()+'.xlsx')});
 $('expAll').addEventListener('click',function(){var l=[['Data','Tipo','Produto','Quantidade','Unidade','Quem','Observação','Registrado em']];
  L.slice().sort(function(a,b){return a[6]<b[6]?-1:1}).forEach(function(r){l.push([fd(r[0])+'/'+r[0].slice(0,4),TIPO[r[1]],r[2],fq(r[3]),r[8],r[4],r[5],fmtTs(r[6])+' '+r[6].slice(0,4)])});
  baixar('lancamentos-bar-'+isoToday()+'.csv',l)});
