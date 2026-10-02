@@ -374,8 +374,11 @@ function current(){var out={};names().forEach(function(k){
 var TIPO={E:'Contagem',I:'Entrada',C:'Saída'};
 function twoTap(b,label,fn){if(b.dataset.arm){clearTimeout(Number(b.dataset.arm));delete b.dataset.arm;b.textContent=label;fn();return}b.textContent='Confirmar?';b.dataset.arm=String(setTimeout(function(){delete b.dataset.arm;b.textContent=label},3000))}
 function podeApagar(r){return sb&&r[7]&&(Date.now()-new Date(r[6]).getTime())<DEL_DIAS*86400000}
-function delBtn(r){return podeApagar(r)?'<button class="del" type="button" data-id="'+r[7]+'" data-desc="'+esc(TIPO[r[1]]+' de '+r[2]+': '+fq(r[3])+' '+r[8]+' ('+fd(r[0])+', '+r[4]+')')+'">apagar</button>':''}
+function saidaIdFor(r){if(!r[5]||r[5].indexOf('Bebida: ')!==0)return null;var t=new Date(r[6]).getTime();var hit=SAIDAS.filter(function(x){return x.data===r[0]&&x.quem===r[4]&&('Bebida: '+fq(x.quantidade)+'x '+x.receita).replace(',','.')===r[5].replace(',','.')&&Math.abs(new Date(x.criado_em).getTime()-t)<10000})[0];return hit?hit.id:null}
+function estornar(b,sid){twoTap(b,'apagar bebida',function(){b.disabled=true;b.textContent='apagando…';sb.rpc('estornar_saida_bebida',{p_id:sid,p_quem:whoName()||'operação'}).then(function(res){if(res.error){b.textContent=(res.error.message||'não apagou').replace(/^.*?: /,'');b.disabled=false;return}load()})})}
+function delBtn(r){var sid=saidaIdFor(r);if(sid&&podeApagar(r))return '<button class="del" type="button" data-sid="'+sid+'" title="Apaga a bebida inteira e devolve o saldo da lata">apagar bebida</button>';return podeApagar(r)?'<button class="del" type="button" data-id="'+r[7]+'" data-desc="'+esc(TIPO[r[1]]+' de '+r[2]+': '+fq(r[3])+' '+r[8]+' ('+fd(r[0])+', '+r[4]+')')+'">apagar</button>':''}
 function bindDel(){document.querySelectorAll('.del').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();
+ if(b.dataset.sid){estornar(b,Number(b.dataset.sid));return}
  twoTap(b,'apagar',function(){b.disabled=true;b.textContent='apagando…';
   sb.from('registros').delete().eq('id',Number(b.dataset.id)).then(function(res){if(res.error){b.textContent='não apagou';b.disabled=false;return}load()})})})})}
 function signed(r){return (r[1]==='I'?'+':r[1]==='C'?'−':'')+fq(r[3])}
@@ -532,7 +535,7 @@ function load(){ if(!sb){renderAll();return Promise.resolve()}
   sb.from('compras_manuais').select('id,produto,unidade,quantidade,quem,criado_em').order('criado_em',{ascending:true}),
   sb.from('receitas').select('id,nome,itens,scoop_g,scoops,latas,atualizado_em').order('nome',{ascending:true}),
   sb.from('potes').select('id,produto,produto_norm,capacidade_g,restante_g,aberto_em,fechado_em,doses,quebra_g,fechado_por,motivo,dose_g,sabor').order('aberto_em',{ascending:false}).limit(300),
-  sb.from('saidas_bebida').select('id,data,hora,quem,receita,quantidade,itens,criado_em').order('criado_em',{ascending:false}).limit(2000),
+  sb.from('saidas_bebida').select('id,data,hora,quem,receita,quantidade,itens,criado_em,estornado_em').is('estornado_em',null).order('criado_em',{ascending:false}).limit(2000),
   sb.from('pedidos').select('id,data_pedido,data_prevista,fornecedor,itens,status,observacao,criado_por,criado_em,recebido_em,recebido_por,itens_recebidos,cancelado_por').order('criado_em',{ascending:false}).limit(500)
  ]).then(function(rs){ if(rs[0].error){$('last').textContent='Não foi possível carregar: '+rs[0].error.message;return}
   L=rs[0].data.map(function(r){return [r.data,r.tipo,r.produto,r.quantidade,r.quem,r.observacao||'',r.criado_em,r.id,r.unidade||'un']});
@@ -720,8 +723,9 @@ $('bebSave').addEventListener('click',function(){var t=$('bebToast'),d=$('bd').v
  }).catch(function(e){$('bebSave').disabled=false;t.textContent='Não salvou: '+(e.message||e).replace(/^.*?: /,'');t.className='toast err'});
 });
 // -- histórico de saída de bebidas --
-function bebGroups(rows){var groups={};rows.forEach(function(r){var k=r[0]+'|'+r[5]+'|'+r[4]+'|'+r[6].slice(0,16);(groups[k]=groups[k]||[]).push(r)});return Object.keys(groups).sort().reverse().map(function(k){var g=groups[k],m=/^Bebida: (\d+(?:[.,]\d+)?)x (.*)$/.exec(g[0][5]);return {data:g[0][0],quem:g[0][4],hora:fmtTs(g[0][6]).split(' às ')[1],qtd:m?Number(m[1].replace(',','.')):null,bebida:m?m[2]:g[0][5].replace('Bebida: ',''),rows:g}})}
-function bebItem(b){return '<div class="item"><div><div>'+esc(b.bebida)+'</div><div class="meta">'+esc(b.quem)+' · '+b.hora+' · '+b.rows.map(function(r){return esc(r[2])+' −'+(r[8]==='kg'&&unitOf(r[2])!=='kg'?fq(Math.round(Number(r[3])*1000))+((poteG(r[2])||0)>=1000?' ml':' g'):fq(r[3])+' '+r[8])}).join(' · ')+'</div></div><div class="qty out">'+(b.qtd!=null?fq(b.qtd):'')+'<small>un</small></div></div>'}
+function bebGroups(rows){var groups={};rows.forEach(function(r){var k=r[0]+'|'+r[5]+'|'+r[4]+'|'+r[6].slice(0,16);(groups[k]=groups[k]||[]).push(r)});return Object.keys(groups).sort().reverse().map(function(k){var g=groups[k],m=/^Bebida: (\d+(?:[.,]\d+)?)x (.*)$/.exec(g[0][5]);return {data:g[0][0],quem:g[0][4],hora:fmtTs(g[0][6]).split(' às ')[1],sid:saidaIdFor(g[0]),apagavel:podeApagar(g[0]),qtd:m?Number(m[1].replace(',','.')):null,bebida:m?m[2]:g[0][5].replace('Bebida: ',''),rows:g}})}
+function bebItem(b){return '<div class="item"><div><div>'+esc(b.bebida)+'</div><div class="meta">'+esc(b.quem)+' · '+b.hora+' · '+b.rows.map(function(r){return esc(r[2])+' −'+(r[8]==='kg'&&unitOf(r[2])!=='kg'?fq(Math.round(Number(r[3])*1000))+((poteG(r[2])||0)>=1000?' ml':' g'):fq(r[3])+' '+r[8])}).join(' · ')+'</div></div><div class="qty out">'+(b.qtd!=null?fq(b.qtd):'')+'<small>un</small></div>'+(b.sid&&b.apagavel?'<button class="del bdel" type="button" data-sid="'+b.sid+'">apagar</button>':'')+'</div>'}
+function bindBebDel(root){root.querySelectorAll('.bdel').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();estornar(b,Number(b.dataset.sid))})})}
 function renderBebHist(){var d=$('bmd').value,rows=L.filter(function(r){return r[0]===d&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),gs=bebGroups(rows);
  var tot=gs.reduce(function(s,b){return s+(b.qtd||0)},0);$('bebDiaN').textContent=tot?tot+' bebida'+(tot>1?'s':''):'';
  var abertos=POTES.filter(function(p){return !p.fechado_em}),fechados=POTES.filter(function(p){return p.fechado_em}).slice(0,12);
@@ -731,10 +735,10 @@ function renderBebHist(){var d=$('bmd').value,rows=L.filter(function(r){return r
   (abertos.length||fechados.length?'<p class="hint" style="margin:6px 0 14px">Lata diferente do real? Em Estoque, toque no produto e use "Ajustar lata em uso".</p>':'');
  var at=$('bebPotes').querySelector('.audtog');if(at)at.addEventListener('click',function(){audOpen=!audOpen;$('bebPotes').querySelector('.audbox').style.display=audOpen?'block':'none';at.querySelector('.arr').style.transform='rotate('+(audOpen?'90':'0')+'deg)'});
  $('bebPotes').querySelectorAll('.pacabou').forEach(function(b){b.addEventListener('click',function(){twoTap(b,b.dataset.m==='residuo'?'finalizar com resíduo':'acabou antes do previsto',function(){var w=$('bw').value==='__other__'?$('bwo').value.trim():$('bw').value;b.disabled=true;sb.rpc('ajustar_pote',{p_produto:b.dataset.p,p_capacidade:Number(b.dataset.c),p_restante:0,p_quem:w||whoName()||'operação',p_motivo:b.dataset.m}).then(function(){load()})})})});
- $('bebHist').innerHTML=gs.length?gs.map(bebItem).join(''):'<p class="empty">Nenhuma saída de bebida em '+fd(d)+'.</p>'}
+ $('bebHist').innerHTML=gs.length?gs.map(bebItem).join(''):'<p class="empty">Nenhuma saída de bebida em '+fd(d)+'.</p>';bindBebDel($('bebHist'))}
 function renderBebFiltro(){var d1=$('bcd').value,d2=$('bcd2').value||d1,rows=L.filter(function(r){return r[0]>=d1&&r[0]<=d2&&r[1]==='C'&&r[5]&&r[5].indexOf('Bebida: ')===0}),gs=bebGroups(rows);
  if(!gs.length){$('bebHistF').innerHTML='<p class="empty">Nenhuma saída de bebida no período.</p>';return}
- var lastD=null,h='';gs.forEach(function(b){if(b.data!==lastD){lastD=b.data;h+='<p class="dayhead">'+fd(b.data)+'</p>'}h+=bebItem(b)});$('bebHistF').innerHTML=h}
+ var lastD=null,h='';gs.forEach(function(b){if(b.data!==lastD){lastD=b.data;h+='<p class="dayhead">'+fd(b.data)+'</p>'}h+=bebItem(b)});$('bebHistF').innerHTML=h;bindBebDel($('bebHistF'))}
 function renderBeb(){renderReceitasList();refreshBebSelects();renderBebHist();renderBebFiltro()}
 // -- alternância de sub-modos --
 document.querySelectorAll('#beb .seg [data-bm]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('#beb .seg [data-bm]').forEach(function(x){x.classList.toggle('on',x===b)});
