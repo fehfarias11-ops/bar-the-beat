@@ -299,6 +299,9 @@ function canon(v){var k=norm(v);if(P[k])return P[k].nome;return names().filter(f
 function unitOf(k){k=norm(k);if(P[k])return P[k].unidade;var r=L.filter(function(x){return norm(x[2])===k}).sort(function(a,b){return a[6]<b[6]?1:-1})[0];return r?r[8]:'un'}
 function qtyUn(r){var pc=pcOf(r[2]);if((r[8]==='cx'||r[8]==='pct')&&pc)return Number(r[3])*pc;if(r[8]==='kg'&&unitOf(r[2])!=='kg'){var g=poteG(r[2]);if(g)return Number(r[3])*1000/g}return Number(r[3])}
 function pcOf(k){var p=P[norm(k)];return p&&p.por_caixa?Number(p.por_caixa):null}
+// ---- Grupo A: críticos (trava estrita). Todo o resto = Grupo B ----
+var GRUPO_A_RE=/proteina|whey|creatina|agua de coco/;
+function grupoA(nome){return GRUPO_A_RE.test(norm(nome))}
 function baseOf(k){var p=P[norm(k)];if(!p||!p.sabor)return k;var i=norm(k).lastIndexOf(norm(p.sabor));return i>0?k.slice(0,i).trim():k}
 function flavorsOf(base){var b=norm(base),out=[];names().forEach(function(n){var p=P[norm(n)];if(p&&p.sabor&&norm(baseOf(n))===b)out.push({name:n,sabor:p.sabor})});return out}
 function baseNames(){var seen={},out=[];names().forEach(function(n){var b=baseOf(n),k=norm(b);if(!seen[k]){seen[k]=1;out.push(b)}});return out.sort(function(a,b){return a.localeCompare(b,'pt')})}
@@ -371,7 +374,9 @@ function current(){var out={};names().forEach(function(k){
   var mov=L.filter(function(r){return r[1]!=='E'&&norm(r[2])===norm(k)&&(r[0]>since||(last&&r[0]===since&&r[6]>last[6]))});
   var inQ=mov.filter(function(r){return r[1]==='I'}).reduce(function(s,r){return s+qtyUn(r)},0),outQ=mov.filter(function(r){return r[1]==='C'}).reduce(function(s,r){return s+qtyUn(r)},0);
   if(!last&&!mov.length)return;
-  var p=P[norm(k)]||{};out[k]={atual:base+inQ-outQ,last:last,inQ:inQ,outQ:outQ,unidade:(p.por_caixa?'un':(p.unidade||(last?last[8]:mov[0][8]))),minimo:p.minimo==null?null:Number(p.minimo),pc:p.por_caixa?Number(p.por_caixa):null,pcl:(p.unidade==='pct'?'pct':'cx'),fornecedor:p.fornecedor||'',sabor:p.sabor||'',pedido:p.pedido_em?{em:p.pedido_em,por:p.pedido_por||''}:null}});return out}
+  // saldo líquido: entradas já abatem qualquer déficit de saídas sem saldo
+  var saldo=base+inQ-outQ,p=P[norm(k)]||{};
+  out[k]={atual:saldo,deficit:saldo<-0.0001?-saldo:0,grupoA:grupoA(k),last:last,inQ:inQ,outQ:outQ,unidade:(p.por_caixa?'un':(p.unidade||(last?last[8]:mov[0][8]))),minimo:p.minimo==null?null:Number(p.minimo),pc:p.por_caixa?Number(p.por_caixa):null,pcl:(p.unidade==='pct'?'pct':'cx'),fornecedor:p.fornecedor||'',sabor:p.sabor||'',pedido:p.pedido_em?{em:p.pedido_em,por:p.pedido_por||''}:null}});return out}
 var TIPO={E:'Contagem',I:'Entrada',C:'Saída'};
 function twoTap(b,label,fn){if(b.dataset.arm){clearTimeout(Number(b.dataset.arm));delete b.dataset.arm;b.textContent=label;fn();return}b.textContent='Confirmar?';b.dataset.arm=String(setTimeout(function(){delete b.dataset.arm;b.textContent=label},3000))}
 function podeApagar(r){return sb&&r[7]&&(Date.now()-new Date(r[6]).getTime())<DEL_DIAS*86400000}
@@ -470,7 +475,7 @@ $('manSave').addEventListener('click',function(){var t=$('manToast'),p=$('mpn').
  if(!p){t.textContent='Escolha o produto.';t.className='toast err';return}if(!(q>0)){t.textContent='Digite a quantidade.';t.className='toast err';return}if(!w){t.textContent='Só adiciona informando quem está adicionando.';t.className='toast err';return}
  $('manSave').disabled=true;sb.from('compras_manuais').insert({produto:canon(p)||p,unidade:$('mu').value,quantidade:q,quem:w}).then(function(res){$('manSave').disabled=false;if(res.error){t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
   t.textContent='';$('mq').value='';$('mpn').value='';$('manForm').style.display='none';$('manAdd').style.display='';load()})});
-function saldoHtml(x){return x.atual<0?'<div class="qty out" style="font-size:13px;letter-spacing:.1em;text-transform:uppercase">conferir<small>sem saldo</small></div>':'<div class="qty">'+fq(x.atual)+'<small>'+esc(x.unidade)+'</small></div>'}
+function saldoHtml(x){return x.atual<0?(x.grupoA?'<div class="qty out" style="font-size:13px;letter-spacing:.1em;text-transform:uppercase">conferir<small>sem saldo</small></div>':'<div class="qty out">'+fq(x.atual)+'<small>a compensar</small></div>'):'<div class="qty">'+fq(x.atual)+'<small>'+esc(x.unidade)+'</small></div>'}
 function renderGrupos(keys,c){var grupos=[],idx={};
  keys.forEach(function(k){var x=c[k],base=x.sabor?baseOf(k):k,bk=norm(base);if(!idx[bk]){idx[bk]={base:base,itens:[]};grupos.push(idx[bk])}idx[bk].itens.push(k)});
  return grupos.map(function(g){
@@ -478,7 +483,7 @@ function renderGrupos(keys,c){var grupos=[],idx={};
   var uns={},tot=0;g.itens.forEach(function(k){uns[c[k].unidade]=1;tot+=Math.max(0,c[k].atual)});var mesmaUn=Object.keys(uns).length===1,low=g.itens.filter(function(k){var x=c[k];return x.minimo!=null&&x.atual<=x.minimo}).length;
   var sel=g.itens.filter(function(k){return openMin===k})[0];
   return '<div class="grp"><div class="ghead"><div><div class="gname">'+esc(g.base)+'</div><div class="meta">'+g.itens.length+' variaç'+(g.itens.length>1?'ões':'ão')+(low?' · <span style="color:var(--vermelho)">'+low+' abaixo do mínimo</span>':'')+'</div></div><div class="qty">'+(mesmaUn?fq(tot)+'<small>'+esc(Object.keys(uns)[0])+'</small>':'')+'</div></div>'+
-   '<div class="vchips">'+g.itens.map(function(k){var x=c[k],isLow=x.minimo!=null&&x.atual<=x.minimo;return '<button type="button" class="vchip'+(openMin===k?' on':'')+(isLow?' low':'')+(x.atual<0?' neg':'')+'" data-k="'+esc(k)+'">'+esc(x.sabor||k)+'<b>'+(x.atual<0?'conferir':fq(x.atual)+' '+esc(x.unidade))+'</b>'+(aCaminho(k)?'<i>a caminho</i>':'')+'</button>'}).join('')+'</div>'+
+   '<div class="vchips">'+g.itens.map(function(k){var x=c[k],isLow=x.minimo!=null&&x.atual<=x.minimo;return '<button type="button" class="vchip'+(openMin===k?' on':'')+(isLow?' low':'')+(x.atual<0?' neg':'')+'" data-k="'+esc(k)+'">'+esc(x.sabor||k)+'<b>'+(x.atual<0&&x.grupoA?'conferir':fq(x.atual)+' '+esc(x.unidade))+'</b>'+(aCaminho(k)?'<i>a caminho</i>':'')+'</button>'}).join('')+'</div>'+
    (sel?itemRow(sel,c[sel],false):'')+'</div>'}).join('')}
 function renderAtual(){
  var c=current(),keys=Object.keys(c).sort(function(a,b){return a.localeCompare(b,'pt')}),lowAll=keys.filter(function(k){return c[k].minimo!=null&&c[k].atual<=c[k].minimo});
@@ -573,13 +578,28 @@ $('save').addEventListener('click',function(){
  if(err){t.textContent=err;t.className='toast err';return}
  if(!rows.length){t.textContent='Nenhuma quantidade preenchida.';t.className='toast err';return}
  rows.forEach(function(r){r.observacao=[mot?'Motivo: '+mot:'',o].filter(Boolean).join(' · ')||null});
- // ---- saída não pode deixar o estoque negativo: conferência na linha ----
+ // ---- Entrada (Grupo B): abate o déficit de saídas sem saldo e documenta ----
+ var compens=[];
+ if(tipoSave==='I'){var cI=current();
+  rows.forEach(function(r){var k=r.produto,x=cI[k];
+   if(grupoA(k)||!x||!(x.deficit>0))return;
+   if(r.unidade==='kg'&&x.unidade!=='kg')return;
+   var pcI=pcOf(k),ent=((r.unidade==='cx'||r.unidade==='pct')&&pcI)?r.quantidade*pcI:r.quantidade;
+   var abate=Math.min(ent,x.deficit),liq=x.atual+ent;
+   r.observacao=[r.observacao,'Compensou déficit de '+fq(abate)+' '+x.unidade+' de saídas sem saldo · saldo líquido após a entrada: '+fq(liq)+' '+x.unidade].filter(Boolean).join(' · ');
+   compens.push(k+': −'+fq(abate)+' → '+fq(liq)+' '+x.unidade)})}
+ // ---- Saída: Grupo A trava com conferência; Grupo B passa direto ----
  var ajustes=[];
  if(tipoSave==='C'){var c=current(),pend=0;
   rows.forEach(function(r){var k=r.produto,x=c[k],pc=pcOf(k),emUn=function(q,u){return ((u==='cx'||u==='pct')&&pc)?q*pc:q};
-   var need=emUn(r.quantidade,r.unidade),temUn=x?x.atual:0,uConf=(pc||r.unidade==='cx'||r.unidade==='pct')?'un':r.unidade,fator=(uConf==='un'&&pc&&r.unidade!=='un')?1:1;
+   var need=emUn(r.quantidade,r.unidade),temUn=x?x.atual:0,uConf=(pc||r.unidade==='cx'||r.unidade==='pct')?'un':r.unidade;
    if(x&&r.unidade==='kg'&&x.unidade!=='kg')return; // kg sobre produto em unidade: conversão de lata, não conferimos aqui
-   var falta=!x||temUn<=0||temUn-need<-0.0001;var rowEl=r._row,cb=rowEl.querySelector('.conf');
+   var rowEl=r._row,cb=rowEl.querySelector('.conf');
+   if(!grupoA(k)){ // Grupo B: nunca abre .conf; registra a saída sem saldo na observação
+    rowEl.dataset.conf='';if(cb)cb.remove();
+    if(!x||temUn-need<-0.0001)r.observacao=[r.observacao,'Saída sem saldo no sistema (saldo após: '+fq(temUn-need)+' '+uConf+') · a compensar na próxima entrada'].filter(Boolean).join(' · ');
+    return}
+   var falta=!x||temUn<=0||temUn-need<-0.0001;
    if(!falta){rowEl.dataset.conf='';if(cb)cb.remove();return}
    var ql=rowEl.querySelector('.confq'),v=ql?ql.value:'';
    if(v===''){pend++;if(!cb){cb=document.createElement('div');cb.className='conf';rowEl.querySelector('.body').appendChild(cb)}
@@ -598,7 +618,7 @@ $('save').addEventListener('click',function(){
   if(!res||res._stop)return;
   if(res.error){btn.disabled=false;t.textContent='Não salvou: '+res.error.message;t.className='toast err';return}
   return sb.from('produtos').upsert(prods).then(function(){btn.disabled=false;
-   t.textContent={E:(contMode==='add'?'Soma ao estoque':'Contagem'),I:'Entrada',C:'Saída'}[mode]+' de '+fd(d)+' salva por '+w+'. '+rows.length+' produto'+(rows.length>1?'s':'')+(ajustes.length?' · '+ajustes.length+' ajuste'+(ajustes.length>1?'s':'')+' de inventário':'')+'.';t.className='toast ok';
+   t.textContent={E:(contMode==='add'?'Soma ao estoque':'Contagem'),I:'Entrada',C:'Saída'}[mode]+' de '+fd(d)+' salva por '+w+'. '+rows.length+' produto'+(rows.length>1?'s':'')+(ajustes.length?' · '+ajustes.length+' ajuste'+(ajustes.length>1?'s':'')+' de inventário':'')+(compens.length?' · Compensação: '+compens.join('; '):'')+'.';t.className='toast ok';
    $('o').value='';$('obsBox').style.display='none';$('obsBtn').style.display='';$('cd').value=d;$('cd2').value=d;$('vd').value=d;
    load().then(function(){resetRows();setTimeout(function(){t.textContent=''},5000)})});
  });
@@ -861,7 +881,7 @@ $('expAll').addEventListener('click',function(){var l=[['Data','Tipo','Produto',
  L.slice().sort(function(a,b){return a[6]<b[6]?-1:1}).forEach(function(r){l.push([fd(r[0])+'/'+r[0].slice(0,4),TIPO[r[1]],r[2],fq(r[3]),r[8],r[4],r[5],fmtTs(r[6])+' '+r[6].slice(0,4)])});
  baixar('lancamentos-bar-'+isoToday()+'.csv',l)});
 $('expEst').addEventListener('click',function(){var c=current(),l=[['Produto','Sabor','Estoque atual','Unidade','Un. por caixa','Fornecedor','Última contagem','Contado por','Entradas desde','Saídas desde','Mínimo']];
- Object.keys(c).sort(function(a,b){return a.localeCompare(b,'pt')}).forEach(function(k){var x=c[k];l.push([k,x.sabor,x.atual<0?'conferir':fq(x.atual),x.unidade,x.pc?fq(x.pc):'',x.fornecedor,x.last?fd(x.last[0])+'/'+x.last[0].slice(0,4):'',x.last?x.last[4]:'',fq(x.inQ),fq(x.outQ),x.minimo==null?'':fq(x.minimo)])});
+ Object.keys(c).sort(function(a,b){return a.localeCompare(b,'pt')}).forEach(function(k){var x=c[k];l.push([k,x.sabor,x.atual<0&&x.grupoA?'conferir':fq(x.atual),x.unidade,x.pc?fq(x.pc):'',x.fornecedor,x.last?fd(x.last[0])+'/'+x.last[0].slice(0,4):'',x.last?x.last[4]:'',fq(x.inQ),fq(x.outQ),x.minimo==null?'':fq(x.minimo)])});
  baixar('estoque-bar-'+isoToday()+'.csv',l)});
 </script>
 </body>
